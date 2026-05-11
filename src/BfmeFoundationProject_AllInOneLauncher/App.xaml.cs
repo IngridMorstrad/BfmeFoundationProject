@@ -30,6 +30,11 @@ namespace BfmeFoundationProject.AllInOneLauncher
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            base.OnStartup(e);
+
+            // Force software rendering to prevent Wine/DirectX crashes on Mac/Linux
+            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+
 #if DEBUG
 #else
             if (File.Exists(Path.Combine(LauncherUpdateManager.LauncherAppDirectory, "AllInOneLauncher.exe")) && Path.GetDirectoryName(Environment.ProcessPath)!.ToLower().Trim('\\').Trim('/') != LauncherUpdateManager.LauncherAppDirectory.ToLower().Trim('\\').Trim('/'))
@@ -64,8 +69,6 @@ namespace BfmeFoundationProject.AllInOneLauncher
                 ExitImmediately();
                 return;
             }
-
-            base.OnStartup(e);
 
             StartServer();
             EnsureShortcut();
