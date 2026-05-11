@@ -20,6 +20,10 @@
 
 		<DebugSymbols>true</DebugSymbols>
 		<DebugType>embedded</DebugType>
+
+		<SelfContained>true</SelfContained>
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<PublishSingleFile>false</PublishSingleFile>
 	</PropertyGroup>
 
 	<Target Name="GenerateBuildInfo" BeforeTargets="BeforeBuild">

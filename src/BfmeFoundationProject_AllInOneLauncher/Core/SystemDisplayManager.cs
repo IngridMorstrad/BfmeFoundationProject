@@ -17,10 +17,13 @@ public static class SystemDisplayManager
 
         while (EnumDisplaySettings(null, i, ref vDevMode))
         {
-            if (vDevMode.dmDisplayFrequency == 60 && vDevMode.dmBitsPerPel == 32 && vDevMode.dmDisplayFixedOutput == 0)
+            if (vDevMode.dmBitsPerPel == 32)
             {
                 string resolution = vDevMode.dmPelsWidth + " " + vDevMode.dmPelsHeight;
-                allResolutions.Add(resolution);
+                if (!allResolutions.Contains(resolution))
+                {
+                    allResolutions.Add(resolution);
+                }
             }
 
             i++;
@@ -33,6 +36,11 @@ public static class SystemDisplayManager
         .Select(r => r.resolution)
         .Skip(Math.Min(3, allResolutions.Count))
         .ToList();
+
+        if (allResolutions.Count == 0)
+        {
+            allResolutions.Add("1920 1080");
+        }
 
         return allResolutions;
     }
