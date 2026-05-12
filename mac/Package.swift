@@ -58,8 +58,11 @@ let package = Package(
         // can expose a real module even before its feature lands.
         .target(
             name: "BfmeKit",
-            dependencies: ["BfmeKitCore"],
-            path: "Sources/BfmeKit"
+            dependencies: ["BfmeKitCore", "BfmeHttpInstruments"],
+            path: "Sources/BfmeKit",
+            resources: [
+                .copy("Resources")
+            ]
         ),
         .target(
             name: "BfmeWorkshopKit",
@@ -104,6 +107,11 @@ let package = Package(
             name: "BfmeDirectXRuntimeTests",
             dependencies: ["BfmeDirectXRuntime"],
             path: "Tests/BfmeDirectXRuntimeTests"
+        ),
+        .testTarget(
+            name: "BfmeKitTests",
+            dependencies: ["BfmeKit", "BfmeKitCore"],
+            path: "Tests/BfmeKitTests"
         )
     ]
 )
