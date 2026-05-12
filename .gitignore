@@ -38,3 +38,8 @@ BfmeFoundationProject_OnlinePortal.sln
 BfmeFoundationProject_RelayServer.sln
 BfmeFoundationProject_UnifiedServer.sln
 BfmeFoundationProject_WorkshopStudio.sln
+
+# SwiftPM build artifacts for the macOS native rewrite
+mac/.build/
+mac/.swiftpm/
+mac/Package.resolved
