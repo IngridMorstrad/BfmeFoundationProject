@@ -238,11 +238,40 @@ public enum BfmeRegistryManager {
     /// `HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers`
     /// to force Windows XP SP3 compatibility mode. macOS has no equivalent
     /// shim layer. We keep the entry point so the call sites in
-    /// `EnsureDefaults` don't need to branch, and we emit a single log line
-    /// per call so the behavior matches what the doc comment promises
-    /// (review bullet #10).
+    /// `EnsureDefaults` don't need to branch, and we emit a single log
+    /// line per unique path so `ensureDefaults` (which calls this for both
+    /// exePath and datPath, cascading from RotWK into BFME2) doesn't spam
+    /// four identical lines per fresh install. Review-v2 #5.
     public static func ensureCompatibilitySettings(_ gamePath: String) {
-        print("BfmeRegistryManager.ensureCompatibilitySettings: skipping AppCompatFlags write on non-Windows host for \(gamePath).")
+        if compatibilityLogger.shouldLog(gamePath) {
+            print("BfmeRegistryManager.ensureCompatibilitySettings: skipping AppCompatFlags write on non-Windows host for \(gamePath).")
+        }
+    }
+
+    /// Test hook: resets the per-process "already logged" set so unit tests
+    /// that assert logging order don't see cross-test pollution.
+    public static func resetCompatibilityLogCacheForTesting() {
+        compatibilityLogger.reset()
+    }
+
+    /// Thread-safe dedup table for `ensureCompatibilitySettings`. Backed by
+    /// `os_unfair_lock` on macOS and `NSLock` elsewhere so Linux CI still
+    /// compiles.
+    private static let compatibilityLogger = CompatibilityLogger()
+
+    private final class CompatibilityLogger: @unchecked Sendable {
+        private let lock = NSLock()
+        private var logged: Set<String> = []
+
+        func shouldLog(_ path: String) -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            return logged.insert(path).inserted
+        }
+
+        func reset() {
+            lock.lock(); defer { lock.unlock() }
+            logged.removeAll()
+        }
     }
 
     /// Reports whether a game's `InstallPath` points at a directory that

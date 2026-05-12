@@ -97,4 +97,57 @@ final class BfmeRegistryManagerTests: XCTestCase {
         let exists = await RegistryStore.shared.openSubKey(hive: .hkcu, path: key)
         XCTAssertFalse(exists)
     }
+
+    /// Review-v2 #5: the compatibility-settings log must dedup per path so
+    /// `ensureDefaults` (which calls it for exePath + datPath, and
+    /// cascades from RotWK into BFME2) does not emit four identical lines
+    /// on a fresh install. The dedup table is process-global; we reset it
+    /// here to keep tests isolated.
+    func testEnsureCompatibilitySettingsLogsOnlyOncePerPath() {
+        BfmeRegistryManager.resetCompatibilityLogCacheForTesting()
+        let path = "/tmp/fresh-install/lotrbfme.exe"
+        // Capture stdout by redirecting via a pipe. We only assert that
+        // the first call writes SOMETHING and subsequent calls write
+        // nothing (ordering is stable regardless of OSLog availability).
+        let stdoutCopy = dup(fileno(stdout))
+        defer { dup2(stdoutCopy, fileno(stdout)); close(stdoutCopy) }
+        let pipe = Pipe()
+        dup2(pipe.fileHandleForWriting.fileDescriptor, fileno(stdout))
+
+        BfmeRegistryManager.ensureCompatibilitySettings(path)
+        BfmeRegistryManager.ensureCompatibilitySettings(path)
+        BfmeRegistryManager.ensureCompatibilitySettings(path)
+        fflush(stdout)
+        try? pipe.fileHandleForWriting.close()
+        dup2(stdoutCopy, fileno(stdout))
+
+        let captured = String(
+            data: pipe.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        ) ?? ""
+        let occurrences = captured.components(separatedBy: "ensureCompatibilitySettings").count - 1
+        XCTAssertEqual(occurrences, 1, "expected exactly one log line, got \(occurrences): \(captured)")
+    }
+
+    func testEnsureCompatibilitySettingsLogsOncePerUniquePath() {
+        BfmeRegistryManager.resetCompatibilityLogCacheForTesting()
+        let stdoutCopy = dup(fileno(stdout))
+        defer { dup2(stdoutCopy, fileno(stdout)); close(stdoutCopy) }
+        let pipe = Pipe()
+        dup2(pipe.fileHandleForWriting.fileDescriptor, fileno(stdout))
+
+        BfmeRegistryManager.ensureCompatibilitySettings("/tmp/a.exe")
+        BfmeRegistryManager.ensureCompatibilitySettings("/tmp/b.exe")
+        BfmeRegistryManager.ensureCompatibilitySettings("/tmp/a.exe")
+        fflush(stdout)
+        try? pipe.fileHandleForWriting.close()
+        dup2(stdoutCopy, fileno(stdout))
+
+        let captured = String(
+            data: pipe.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        ) ?? ""
+        let occurrences = captured.components(separatedBy: "ensureCompatibilitySettings").count - 1
+        XCTAssertEqual(occurrences, 2, "expected one log per unique path, got \(occurrences): \(captured)")
+    }
 }

@@ -6,8 +6,20 @@ import BfmeKitCore
 import CoreGraphics
 #endif
 
+/// NOTE (review-v2 #6): The pixel-fidelity tests for the map-preview
+/// compositor are gated behind `#if canImport(CoreGraphics)`. On Linux CI
+/// the compositor runs against synthesized transparent PNG buffers (the
+/// portable PNG reader in `BfmeMapImporter` can extract IHDR dimensions
+/// but cannot decode pixel data without libpng/swift-png), so any
+/// Linux-only assertion on bitmap contents would be trivially green. We
+/// prefer a visibly absent test to a rubber-stamp one: the compositor
+/// pixel math still runs through `generateMapPreviewBitmap` to exercise
+/// the layout code, but we only assert on resulting pixels when
+/// CoreGraphics is available to decode the PNG resources end-to-end.
+
 final class BfmeMapImporterTests: XCTestCase {
-    func testGeneratePreviewComposesNonEmptyBitmap() {
+    #if canImport(CoreGraphics)
+    func testGeneratePreviewComposesNonEmptyBitmapOnMac() {
         let map = BfmeMap(
             id: "maps/fourplayer.map",
             name: "Four Player",
@@ -34,7 +46,6 @@ final class BfmeMapImporterTests: XCTestCase {
         XCTAssertTrue(hasNonZero)
     }
 
-    #if canImport(CoreGraphics)
     func testGenerateMapPreviewReturnsCGImageOnMac() {
         let map = BfmeMap(
             id: "maps/fourplayer.map",
@@ -50,23 +61,6 @@ final class BfmeMapImporterTests: XCTestCase {
         if let image {
             XCTAssertGreaterThan(image.width, 0)
             XCTAssertGreaterThan(image.height, 0)
-        }
-    }
-    #else
-    func testLinuxFallbackReturnsRGBABitmap() {
-        let map = BfmeMap(
-            id: "maps/fourplayer.map",
-            name: "Four Player",
-            game: 1,
-            preview: "",
-            width: 640,
-            height: 480,
-            spots: []
-        )
-        let result = BfmeMapImporter.generateMapPreview(map)
-        XCTAssertNotNil(result)
-        if let result {
-            XCTAssertFalse(result.pixels.isEmpty)
         }
     }
     #endif

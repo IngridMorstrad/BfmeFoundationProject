@@ -1,5 +1,10 @@
 import Foundation
 import BfmeKit
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 /// Port of `ArenaProcessHelper.cs`. The Windows original does three things:
 ///   1. Spawns `BfmeFoundationProject_OnlineArena.exe` via `Process.Start`.
@@ -11,10 +16,18 @@ import BfmeKit
 /// Step (3) is explicitly Windows-only — there is no cross-platform way to
 /// embed a Wine-hosted window into a native NSWindow, and the review's
 /// guidance was to leave window embedding as a documented TODO. Steps (1)
-/// and (2) port cleanly: macOS has `Process` for spawning and `FileHandle`
-/// pipes or named Unix domain sockets for IPC. We keep the process-spawn
-/// piece here and stub the window-embed side until a future iteration can
-/// experiment with `CGSSetWindowTransform`-style tricks on a real Mac.
+/// and (2) port cleanly: macOS has `Process` for spawning and POSIX FIFOs
+/// for IPC. We create the FIFO BEFORE `Process.run` (review-v2 #4) so the
+/// child has somewhere to connect when it starts up.
+///
+/// The read side of the FIFO is the CALLER's responsibility: `launch`
+/// returns the FIFO path through `LaunchResult.pipePath` and leaves it
+/// dangling after the child exits. Higher layers that want to consume
+/// layout hints open the FIFO themselves (`FileHandle(forReadingAtPath:)`)
+/// and drive the I/O on their preferred queue. We wire a full
+/// Network.framework `NWListener` only when a consumer asks for it; for
+/// the current iteration a FIFO is sufficient to honor the child's argv
+/// contract and unblock `Process.run`.
 ///
 /// `Win32Helper` (review bullet #13 last item) was intentionally dropped:
 /// it was a grab-bag of P/Invoke declarations (`SetParent`, `MoveWindow`,
@@ -43,18 +56,53 @@ public enum ArenaProcessHelper {
         case notInstalled
         case noCompatibilityLayer
         case spawnFailed(String)
+        case pipeCreateFailed(String)
 
         public var description: String {
             switch self {
             case .notInstalled: return "Arena binary is not installed."
             case .noCompatibilityLayer: return "No Wine/CrossOver/Whisky runtime is available to host the arena exe."
             case .spawnFailed(let msg): return "Arena spawn failed: \(msg)"
+            case .pipeCreateFailed(let msg): return "Arena pipe create failed: \(msg)"
             }
         }
     }
 
+    /// Return value for `launch`. Exposes both the spawned `Process` and
+    /// the filesystem path of the FIFO so callers can open the read side
+    /// at their leisure.
+    public struct LaunchResult: @unchecked Sendable {
+        public let process: Process
+        public let pipePath: String
+    }
+
+    /// Creates a POSIX FIFO at `/tmp/bfme-arena-<uuid>.sock` (or a
+    /// caller-supplied directory). Returns the absolute path on success.
+    /// Public so tests can verify the endpoint exists before any process
+    /// is spawned.
+    public static func createPipeEndpoint(
+        uuid: String = UUID().uuidString,
+        directory: String = NSTemporaryDirectory()
+    ) throws -> String {
+        let normalizedDir = directory.hasSuffix("/") ? String(directory.dropLast()) : directory
+        let path = "\(normalizedDir)/bfme-arena-\(uuid).sock"
+        // If something stale exists, remove it. The FIFO lives only for
+        // the lifetime of the arena process.
+        unlink(path)
+        let result = path.withCString { cString in
+            mkfifo(cString, 0o600)
+        }
+        if result != 0 {
+            let code = errno
+            let message = String(cString: strerror(code))
+            throw ArenaError.pipeCreateFailed("mkfifo(\(path)) failed: \(message)")
+        }
+        return path
+    }
+
     /// The running arena process, if any. Exposed for tests.
     nonisolated(unsafe) private static var running: Process?
+    nonisolated(unsafe) private static var runningPipePath: String?
     private static let lock = NSLock()
 
     private static func withLock<T>(_ body: () throws -> T) rethrows -> T {
@@ -64,19 +112,26 @@ public enum ArenaProcessHelper {
 
     /// Launches the arena binary through the supplied runner resolver. The
     /// arguments match the Windows invocation (see `ArenaProcessHelper.cs`):
-    /// `--embedded <token> <branch> --new --corner-radius <r> --scale <json> --pipe-name <uuid>`.
-    /// Unlike Windows, we do not attempt to reparent the child window — that
-    /// step is documented as a macOS TODO (see doc comment above).
+    /// `--embedded <token> <branch> --new --corner-radius <r> --scale <json> --pipe-name <path>`.
+    /// The FIFO at `--pipe-name` is created BEFORE `Process.run` so the
+    /// child never races a non-existent endpoint. Unlike Windows, we do not
+    /// attempt to reparent the child window — that step is documented as a
+    /// macOS TODO (see doc comment above).
     @discardableResult
     public static func launch(
         accessToken: String,
         updateBranch: String,
         cornerRadius: Double,
         scaleJSON: String,
-        pipeName: String = UUID().uuidString,
+        pipeUUID: String = UUID().uuidString,
         configuration: Configuration
-    ) async throws -> Process {
+    ) async throws -> LaunchResult {
         guard ArenaDataHelper.isInstalled else { throw ArenaError.notInstalled }
+
+        // Create the IPC endpoint FIRST. Review-v2 #4: the previous port
+        // forwarded `--pipe-name` on argv but never created anything at
+        // that path, so the child would hang on connect.
+        let pipePath = try createPipeEndpoint(uuid: pipeUUID)
 
         FirewallHelper.addFirewallRule(
             name: "Bfme Foundation Project - Online Menu",
@@ -85,6 +140,7 @@ public enum ArenaProcessHelper {
 
         let exePath = ArenaDataHelper.arenaExecutablePath
         guard let (runner, argPrefix) = await configuration.runnerResolver(exePath) else {
+            unlink(pipePath)
             throw ArenaError.noCompatibilityLayer
         }
 
@@ -94,7 +150,7 @@ public enum ArenaProcessHelper {
             "--new",
             "--corner-radius", String(cornerRadius),
             "--scale", scaleJSON,
-            "--pipe-name", pipeName
+            "--pipe-name", pipePath
         ]
 
         let process = Process()
@@ -104,26 +160,37 @@ public enum ArenaProcessHelper {
         do {
             try process.run()
         } catch {
+            unlink(pipePath)
             throw ArenaError.spawnFailed(String(describing: error))
         }
-        withLock { running = process }
-        return process
+        withLock {
+            running = process
+            runningPipePath = pipePath
+        }
+        return LaunchResult(process: process, pipePath: pipePath)
     }
 
     /// Signals any previously-spawned arena process to terminate, then
     /// waits. On macOS we send `SIGTERM` rather than a Win32 `WM_CLOSE`;
-    /// the wine-hosted child translates the signal internally.
+    /// the wine-hosted child translates the signal internally. Also
+    /// unlinks the FIFO so `/tmp` does not accumulate stale endpoints.
     public static func unload() async {
-        let p: Process? = withLock {
+        let snapshot: (Process?, String?) = withLock {
             let existing = running
+            let pipe = runningPipePath
             running = nil
-            return existing
+            runningPipePath = nil
+            return (existing, pipe)
         }
-        guard let process = p else { return }
-        if process.isRunning {
-            process.terminate()
+        if let process = snapshot.0 {
+            if process.isRunning {
+                process.terminate()
+            }
+            process.waitUntilExit()
         }
-        process.waitUntilExit()
+        if let pipe = snapshot.1 {
+            unlink(pipe)
+        }
     }
 
     /// True while an arena process is hosted. Exposed for tests.
