@@ -1,0 +1,36 @@
+name: Linux (Swift portable subset)
+
+on:
+  push:
+    paths:
+      - 'mac/**'
+      - '.github/workflows/linux-swift.yml'
+  pull_request:
+    paths:
+      - 'mac/**'
+      - '.github/workflows/linux-swift.yml'
+
+jobs:
+  build-and-test:
+    name: swift build + swift test on ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install zlib development headers
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+
+      - name: Set up Swift 6.0
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.0'
+
+      - name: Print Swift version
+        run: swift --version
+
+      - name: Build portable subset
+        run: swift build --package-path mac
+
+      - name: Run tests
+        run: swift test --package-path mac

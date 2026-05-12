@@ -1,0 +1,49 @@
+name: macOS (Apple Silicon)
+
+on:
+  push:
+    paths:
+      - 'mac/**'
+      - '.github/workflows/macos.yml'
+  pull_request:
+    paths:
+      - 'mac/**'
+      - '.github/workflows/macos.yml'
+
+jobs:
+  build-and-test:
+    name: swift build + swift test on macos-14 (arm64)
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode 16
+        run: |
+          XCODE_PATH=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE_PATH" ]; then
+            echo "Selecting $XCODE_PATH"
+            sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          else
+            echo "No Xcode 16.x found; falling back to system default"
+            ls -d /Applications/Xcode*.app 2>/dev/null || true
+          fi
+
+      - name: Print toolchain versions
+        run: |
+          swift --version
+          xcodebuild -version || true
+          uname -m
+
+      - name: Build release (arm64)
+        run: swift build -c release --package-path mac
+
+      - name: Run tests
+        run: swift test --package-path mac
+
+      - name: Upload BfmeLauncherApp binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: BfmeLauncherApp-macos-arm64
+          path: mac/.build/release/BfmeLauncherApp
+          if-no-files-found: error

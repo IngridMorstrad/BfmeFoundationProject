@@ -59,3 +59,8 @@ We don't have a license. Everything that is in this repository is open source. D
 
 ## Contributing
 Feel free to! We can always use an extra pair of hands and eyes to fix and catch bugs! The rules to contributing are simple: be respectful, use common sense, and don't do stupid shit. Anything else is ok.
+
+## macOS (Apple Silicon) Port
+A native macOS (Apple Silicon) rewrite of the launcher and its support libraries lives under the [`mac/`](mac/README.md) directory. It is written from scratch in Swift 6 / SwiftUI / AppKit, builds to a single `arm64` binary with Swift Package Manager, and does not require Mono, .NET, or Rosetta. The original Windows `src/` tree is preserved untouched; the macOS tree is purely additive.
+
+See [`mac/README.md`](mac/README.md) for prerequisites (macOS 14 Sonoma+, M1/M2/M3/M4, Xcode 16+ or Swift 6.x), build and test commands, the module-by-module architecture map, notes on running BFME itself through Wine / CrossOver / Whisky / Apple's Game Porting Toolkit, and what is verified on CI versus what requires a real Mac.
