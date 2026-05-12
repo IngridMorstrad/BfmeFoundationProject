@@ -1,6 +1,6 @@
 import Foundation
 
-public struct BfmeFaction: Equatable, Hashable, Sendable {
+public struct BfmeFaction: Codable, Equatable, Hashable, Sendable {
     public var name: String
     public var id: Int
     public var bigIcon: String
@@ -11,6 +11,16 @@ public struct BfmeFaction: Equatable, Hashable, Sendable {
         self.id = id
         self.bigIcon = bigIcon
         self.smallIcon = smallIcon
+    }
+
+    // JSON wire format on the Workshop backend is PascalCase (Newtonsoft.Json
+    // defaults). Pinning the coding keys here keeps the Swift client
+    // byte-compatible with the .NET one.
+    enum CodingKeys: String, CodingKey {
+        case name = "Name"
+        case id = "Id"
+        case bigIcon = "BigIcon"
+        case smallIcon = "SmallIcon"
     }
 
     public static func standardBfme1Factions() -> [BfmeFaction] {

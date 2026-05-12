@@ -2,8 +2,8 @@ import Foundation
 import BfmeKitCore
 import BfmeHttpInstruments
 
-/// Placeholder for the online multiplayer helpers (deployment config, arena
-/// data, firewall/update helpers). Ported in a later feature.
+/// Umbrella namespace for the online multiplayer (Arena) helpers. Concrete
+/// helpers live in `Helpers/`, data types in `Data/`.
 public enum BfmeOnlineKit {
-    public static let moduleVersion = "0.1.0"
+    public static let moduleVersion = "0.2.0"
 }

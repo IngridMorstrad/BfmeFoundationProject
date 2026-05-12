@@ -112,6 +112,16 @@ let package = Package(
             name: "BfmeKitTests",
             dependencies: ["BfmeKit", "BfmeKitCore"],
             path: "Tests/BfmeKitTests"
+        ),
+        .testTarget(
+            name: "BfmeWorkshopKitTests",
+            dependencies: ["BfmeWorkshopKit", "BfmeKit", "BfmeKitCore", "BfmeHttpInstruments"],
+            path: "Tests/BfmeWorkshopKitTests"
+        ),
+        .testTarget(
+            name: "BfmeOnlineKitTests",
+            dependencies: ["BfmeOnlineKit", "BfmeKit", "BfmeKitCore", "BfmeHttpInstruments"],
+            path: "Tests/BfmeOnlineKitTests"
         )
     ]
 )

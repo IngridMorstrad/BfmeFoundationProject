@@ -2,8 +2,8 @@ import Foundation
 import BfmeKitCore
 import BfmeHttpInstruments
 
-/// Placeholder umbrella for the workshop client. Later features port the
-/// download/library/query/script managers into this module.
+/// Umbrella namespace for the workshop client. Concrete managers live in
+/// `Logic/`, data types in `Data/`, and utility helpers in `Utils/`.
 public enum BfmeWorkshopKit {
-    public static let moduleVersion = "0.1.0"
+    public static let moduleVersion = "0.2.0"
 }

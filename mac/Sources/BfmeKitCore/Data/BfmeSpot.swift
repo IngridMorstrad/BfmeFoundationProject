@@ -1,6 +1,6 @@
 import Foundation
 
-public struct BfmeSpot: Equatable, Hashable, Sendable {
+public struct BfmeSpot: Codable, Equatable, Hashable, Sendable {
     public var x: Float
     public var y: Float
     public var team: Int
@@ -11,5 +11,12 @@ public struct BfmeSpot: Equatable, Hashable, Sendable {
         self.y = y
         self.team = team
         self.index = index
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case x = "X"
+        case y = "Y"
+        case team = "Team"
+        case index = "Index"
     }
 }
