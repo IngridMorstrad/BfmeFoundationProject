@@ -105,43 +105,51 @@ enum Md5Hash {
         }
 
         private mutating func process(_ chunk: Data) {
+            let bytes = [UInt8](chunk)
             var m = [UInt32](repeating: 0, count: 16)
-            chunk.withUnsafeBytes { raw in
-                for i in 0..<16 {
-                    let base = i * 4
-                    m[i] = UInt32(raw[base])
-                        | (UInt32(raw[base + 1]) << 8)
-                        | (UInt32(raw[base + 2]) << 16)
-                        | (UInt32(raw[base + 3]) << 24)
-                }
+            for i in 0..<16 {
+                m[i] = Self.loadLE32(bytes, offset: i * 4)
             }
             var a = state.0
             var b = state.1
             var c = state.2
             var d = state.3
             for i in 0..<64 {
-                var f: UInt32
-                var g: Int
-                switch i {
-                case 0..<16:
-                    f = (b & c) | ((~b) & d); g = i
-                case 16..<32:
-                    f = (d & b) | ((~d) & c); g = (5 * i + 1) % 16
-                case 32..<48:
-                    f = b ^ c ^ d; g = (3 * i + 5) % 16
-                default:
-                    f = c ^ (b | (~d)); g = (7 * i) % 16
-                }
+                let (f, g) = Self.roundValues(i: i, b: b, c: c, d: d)
                 let temp = d
                 d = c
                 c = b
-                b = b &+ Self.leftRotate(a &+ f &+ Self.kTable[i] &+ m[g], by: Self.sTable[i])
+                let sum: UInt32 = a &+ f &+ Self.kTable[i] &+ m[g]
+                b = b &+ Self.leftRotate(sum, by: Self.sTable[i])
                 a = temp
             }
             state.0 = state.0 &+ a
             state.1 = state.1 &+ b
             state.2 = state.2 &+ c
             state.3 = state.3 &+ d
+        }
+
+        @inline(__always)
+        private static func loadLE32(_ bytes: [UInt8], offset: Int) -> UInt32 {
+            let b0 = UInt32(bytes[offset])
+            let b1 = UInt32(bytes[offset + 1]) << 8
+            let b2 = UInt32(bytes[offset + 2]) << 16
+            let b3 = UInt32(bytes[offset + 3]) << 24
+            return b0 | b1 | b2 | b3
+        }
+
+        @inline(__always)
+        private static func roundValues(i: Int, b: UInt32, c: UInt32, d: UInt32) -> (UInt32, Int) {
+            switch i {
+            case 0..<16:
+                return ((b & c) | ((~b) & d), i)
+            case 16..<32:
+                return ((d & b) | ((~d) & c), (5 * i + 1) % 16)
+            case 32..<48:
+                return (b ^ c ^ d, (3 * i + 5) % 16)
+            default:
+                return (c ^ (b | (~d)), (7 * i) % 16)
+            }
         }
 
         private static func leftRotate(_ x: UInt32, by n: UInt32) -> UInt32 {

@@ -149,7 +149,7 @@ public enum FileUtils {
         for item in items {
             let dest = destination.appendingPathComponent(item.lastPathComponent)
             var isDir: ObjCBool = false
-            fm.fileExists(atPath: item.path, isDirectory: &isDir)
+            _ = fm.fileExists(atPath: item.path, isDirectory: &isDir)
             if isDir.boolValue {
                 try copyDirectory(from: item, to: dest)
             } else {
