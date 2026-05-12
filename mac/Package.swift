@@ -72,7 +72,7 @@ let package = Package(
         ),
         .target(
             name: "BfmeOnlineKit",
-            dependencies: ["BfmeKitCore", "BfmeHttpInstruments"],
+            dependencies: ["BfmeKitCore", "BfmeHttpInstruments", "BfmeKit"],
             path: "Sources/BfmeOnlineKit"
         ),
         .target(
