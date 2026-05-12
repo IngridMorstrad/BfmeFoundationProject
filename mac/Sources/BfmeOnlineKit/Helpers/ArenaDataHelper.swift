@@ -10,7 +10,12 @@ import BfmeKit
 /// writes (`BfmeFoundationProject_OnlineArena.exe`) so cross-platform
 /// tooling that scans for an installed arena on a shared drive still
 /// finds it. On a macOS host the file is launched through Wine /
-/// CrossOver / Whisky — see `ArenaProcessHelper.launchGame`.
+/// CrossOver / Whisky — see `ArenaProcessHelper.launch`.
+///
+/// `Win32Helper` (see review bullet #13) was intentionally dropped: it
+/// was a Windows-only P/Invoke surface (`SetParent`, `MoveWindow`,
+/// `SendMessage`) with no portable analog. References in doc comments
+/// have been removed.
 public enum ArenaDataHelper {
     public static func ensureDirectories() {
         let fm = FileManager.default

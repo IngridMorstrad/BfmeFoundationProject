@@ -380,6 +380,13 @@ public enum BfmeMapImporter {
     /// uncompressed test-resources we ship (IHDR + optional tRNS + IDAT using
     /// deflate). We don't need correctness for arbitrary PNGs; we only need
     /// to recover the width/height so the layout math has meaningful inputs.
+    ///
+    /// Review bullet #7: pixel-fidelity assertions only run on the macOS
+    /// CoreGraphics path (see `testGenerateMapPreviewReturnsCGImageOnMac`).
+    /// Linux CI treats the compositor as a compile-only check for the
+    /// portable subset. This is option (b) from the review: acceptable
+    /// because pulling in a full PNG decoder (swift-png or libpng) would
+    /// double the Linux dependency surface for no production benefit.
     static func decodePNG(at url: URL) -> RGBABitmap? {
         guard let data = try? Data(contentsOf: url), data.count >= 24 else { return nil }
         // PNG signature is 8 bytes, then an IHDR chunk at offset 8.

@@ -134,13 +134,31 @@ public enum BfmeWorkshopScriptManager {
     static func resolveSource(selector: String, source: String) async -> String {
         if source.hasPrefix(#"HKLM\"#) {
             let trimmed = String(source.dropFirst(5))
-            // Match the C# "SOFTWARE\WOW6432Node\..." rewrite on 64-bit hosts.
-            // We always run as the equivalent of a 64-bit process on Apple
-            // Silicon and modern macOS, so rewrite unconditionally.
-            let canonical = trimmed.replacingOccurrences(
-                of: #"SOFTWARE\"#,
-                with: #"SOFTWARE\WOW6432Node\"#
-            )
+            // Match the C# "SOFTWARE\WOW6432Node\..." rewrite on 64-bit hosts
+            // (see review bullet #6). On Windows the registry redirector
+            // silently transparently routes SOFTWARE\EA GAMES and SOFTWARE\
+            // Electronic Arts writes to the WOW6432Node hive, and BFME (a
+            // 32-bit process) reads from the same redirected view. We mirror
+            // that by rewriting `SOFTWARE\` only when:
+            //   1. The path does not already contain a WOW6432Node segment
+            //      (otherwise we double-prefix to
+            //      SOFTWARE\WOW6432Node\WOW6432Node\...).
+            //   2. The path is not rooted at the deprecated `EA GAMES` hive.
+            //      `ensureFixedRegistry` reads the legacy pre-redirect keys
+            //      under `SOFTWARE\EA GAMES\...` directly, so the rewrite
+            //      would miss that data entirely.
+            let alreadyRedirected = trimmed.range(of: #"\WOW6432Node\"#) != nil
+                || trimmed.hasPrefix(#"SOFTWARE\WOW6432Node\"#)
+            let isDeprecatedEAGames = trimmed.hasPrefix(#"SOFTWARE\EA GAMES\"#)
+            let canonical: String
+            if alreadyRedirected || isDeprecatedEAGames {
+                canonical = trimmed
+            } else {
+                canonical = trimmed.replacingOccurrences(
+                    of: #"SOFTWARE\"#,
+                    with: #"SOFTWARE\WOW6432Node\"#
+                )
+            }
 
             if selector == "all" {
                 let names = await RegistryStore.shared.valueNames(hive: .hklm, path: canonical)

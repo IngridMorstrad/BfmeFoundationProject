@@ -37,6 +37,18 @@ public struct DirectXHostSurvey: Equatable, Sendable {
 ///      directory so the user can point it at their Wine prefix themselves.
 /// It never invokes `DXSETUP.exe` — that only works inside a Wine prefix,
 /// which is outside the scope of this launcher process.
+///
+/// Review bullet #11: the ~101 MB `dx9_redist.zip` stays bundled in the
+/// package. The alternatives were (a) gating the resource behind `#if
+/// os(macOS)` and (b) downloading on first launch. (a) breaks Linux CI's
+/// extraction test — the whole point of the Linux portable subset is
+/// proving `ensureRuntimes` round-trips an actual archive. (b) turns every
+/// first-run into a network call against a host we don't control, which
+/// the original Windows launcher avoided on purpose. Leaving the zip in
+/// the package is the cheapest path that keeps both CI lanes honest. On
+/// macOS Whisky and CrossOver already ship dxvk/d9vk so `ensureRuntimes`
+/// is strictly a convenience for GPTK users who want to hand DirectX to
+/// their own bottle.
 public enum DirectXRuntimeManager {
     private static let dxRuntimeVersion = "v1"
 

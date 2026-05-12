@@ -26,12 +26,20 @@ struct InstallGamePopup: PopupBody {
                 Spacer()
                 Button("Choose") {
                     #if canImport(AppKit)
+                    // Review bullet #8 fix: `runModal()` on the main actor
+                    // blocks the SwiftUI view tree until the picker closes,
+                    // making the whole window freeze mid-popup. Switching
+                    // to `begin(completionHandler:)` runs the picker on the
+                    // main run loop while letting the SwiftUI scene
+                    // continue to redraw.
                     let panel = NSOpenPanel()
                     panel.canChooseDirectories = true
                     panel.canChooseFiles = false
                     panel.allowsMultipleSelection = false
-                    if panel.runModal() == .OK, let url = panel.url {
-                        selectedLocation = url.path
+                    panel.begin { response in
+                        if response == .OK, let url = panel.url {
+                            selectedLocation = url.path
+                        }
                     }
                     #endif
                 }

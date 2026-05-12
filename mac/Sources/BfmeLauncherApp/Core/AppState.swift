@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import BfmeKitCore
 
 /// Identity of a popup live in the AppState stack. The payload is held as an
 /// `Any` so this file stays portable: the SwiftUI view type sits in the

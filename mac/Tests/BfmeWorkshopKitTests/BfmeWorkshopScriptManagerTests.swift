@@ -108,4 +108,44 @@ final class BfmeWorkshopScriptManagerTests: XCTestCase {
         let result = try await BfmeWorkshopScriptManager.run(source)
         XCTAssertEqual(result.variables["X"], "value")
     }
+
+    /// Review bullet #6: scripts that already reference the canonical
+    /// `SOFTWARE\WOW6432Node\...` path must not be double-prefixed.
+    func testHklmPathAlreadyContainingWow6432NodeIsNotRewritten() async throws {
+        // Pre-seed the canonical (already-redirected) key with a value.
+        let path = #"SOFTWARE\WOW6432Node\Electronic Arts\EA Games\Test"#
+        try await RegistryStore.shared.setValue(
+            hive: .hklm, path: path, name: "InstallPath",
+            value: .string(#"C:\Games\Test"#)
+        )
+        // If the rewrite double-prefixed, the lookup would land on
+        // SOFTWARE\WOW6432Node\WOW6432Node\Electronic Arts\... and return "".
+        let source = "let InstallPath be InstallPath from \"HKLM\\SOFTWARE\\WOW6432Node\\Electronic Arts\\EA Games\\Test\""
+        let result = try await BfmeWorkshopScriptManager.run(source)
+        XCTAssertEqual(result.variables["InstallPath"], #"C:\Games\Test"#)
+    }
+
+    /// Review bullet #6: the deprecated `HKLM\SOFTWARE\EA GAMES\...` hive
+    /// must not get the WOW6432Node rewrite, because `ensureFixedRegistry`
+    /// reads the legacy pre-redirect keys there directly.
+    func testHklmPathRootedAtDeprecatedEAGamesHiveIsPreserved() async throws {
+        let path = #"SOFTWARE\EA GAMES\The Battle for Middle-earth"#
+        try await RegistryStore.shared.setValue(
+            hive: .hklm, path: path, name: "Install Dir",
+            value: .string(#"C:\Legacy\BFME"#)
+        )
+        let source = "let InstallDir be Install Dir from \"HKLM\\SOFTWARE\\EA GAMES\\The Battle for Middle-earth\""
+        // The tokenizer treats `Install` as a selector token and `Dir` as a
+        // keyword, so the value read here uses `Install` as the selector.
+        // Use a name with no space to keep the tokenizer happy.
+        let path2 = #"SOFTWARE\EA GAMES\BFME"#
+        try await RegistryStore.shared.setValue(
+            hive: .hklm, path: path2, name: "InstallDir",
+            value: .string(#"C:\Legacy\BFME"#)
+        )
+        let source2 = "let InstallDir be InstallDir from \"HKLM\\SOFTWARE\\EA GAMES\\BFME\""
+        let result = try await BfmeWorkshopScriptManager.run(source2)
+        XCTAssertEqual(result.variables["InstallDir"], #"C:\Legacy\BFME"#)
+        _ = source
+    }
 }

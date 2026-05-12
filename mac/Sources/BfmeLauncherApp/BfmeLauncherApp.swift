@@ -21,9 +21,11 @@ struct BfmeLauncherApp: App {
 
     init() {
         // Matches the C# startup order: register custom fonts, kick off a
-        // DirectX runtime survey, check for updates.
+        // DirectX runtime survey, check for updates. Review bullet #12:
+        // SegoeUI-VF.ttf is owned by BfmeOnlineKitUI so every consumer
+        // registers it through that bundle; the launcher no longer ships
+        // its own copy.
         BfmeOnlineKitUI.registerBundledFonts()
-        registerLauncherFonts()
     }
 
     var body: some Scene {
@@ -40,17 +42,6 @@ struct BfmeLauncherApp: App {
         }
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1280, height: 800)
-    }
-
-    /// Pulls the `SegoeUI-VF.ttf` resource out of the launcher's own bundle
-    /// (in addition to the OnlineKitUI copy) so every SwiftUI view that
-    /// requests "Segoe UI" renders with the shipped font file.
-    private func registerLauncherFonts() {
-        guard let url = Bundle.module.url(forResource: "SegoeUI-VF", withExtension: "ttf", subdirectory: "Resources/Fonts")
-            ?? Bundle.module.url(forResource: "SegoeUI-VF", withExtension: "ttf") else { return }
-        #if canImport(CoreText)
-        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
-        #endif
     }
 }
 

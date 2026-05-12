@@ -10,10 +10,12 @@ import Security
 /// - On macOS the credentials are stored in the user keychain via
 ///   `SecItemAdd` / `SecItemUpdate` / `SecItemCopyMatching`. This is the
 ///   production path.
-/// - When `Security.framework` is not available (Linux CI in this project's
-///   sandbox) the credentials are persisted to a plaintext file under the
-///   temporary directory. This path is clearly gated and is not used on
-///   macOS builds.
+/// - On non-Darwin platforms (Linux CI) we refuse durable persistence
+///   (review bullet #8). The previous implementation wrote to
+///   `/tmp/bfme-workshop-credentials.json` with default umask which made
+///   the file world-readable. The replacement keeps an in-memory stub so
+///   tests exercising the load/store/clear contract still pass, but no
+///   credential data ever touches disk on a non-Darwin host.
 public enum BfmeWorkshopAuthManager {
     public static let keychainService = "com.bfmefoundation.workshop.credentials"
     public static let keychainAccount = "current-user"
@@ -50,7 +52,7 @@ public enum BfmeWorkshopAuthManager {
         #if canImport(Security)
         return loadFromKeychain() ?? .unauthenticated
         #else
-        return loadFromPlaintextFile() ?? .unauthenticated
+        return inMemoryStore.load() ?? .unauthenticated
         #endif
     }
 
@@ -59,7 +61,7 @@ public enum BfmeWorkshopAuthManager {
         #if canImport(Security)
         clearKeychain()
         #else
-        clearPlaintextFile()
+        inMemoryStore.clear()
         #endif
     }
 
@@ -70,7 +72,7 @@ public enum BfmeWorkshopAuthManager {
         #if canImport(Security)
         try storeInKeychain(info)
         #else
-        try storeInPlaintextFile(info)
+        inMemoryStore.store(info)
         #endif
     }
 
@@ -147,24 +149,33 @@ public enum BfmeWorkshopAuthManager {
     }
     #endif
 
-    // MARK: - Plaintext fallback (Linux CI only)
+    // MARK: - Non-Darwin fallback (process-lifetime, no disk I/O)
 
-    private static var plaintextURL: URL {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent("bfme-workshop-credentials.json")
+    /// Process-lifetime in-memory stand-in used when `Security.framework`
+    /// isn't available (Linux CI). The previous implementation wrote to
+    /// `/tmp/bfme-workshop-credentials.json` with default umask, which was
+    /// world-readable. This replacement is explicitly tests-only: nothing
+    /// persists across processes, and no credential bytes ever land on
+    /// disk. See review bullet #8.
+    final class InMemoryCredentialStore: @unchecked Sendable {
+        private var value: BfmeWorkshopAuthInfo?
+        private let lock = NSLock()
+
+        func load() -> BfmeWorkshopAuthInfo? {
+            lock.lock(); defer { lock.unlock() }
+            return value
+        }
+
+        func store(_ info: BfmeWorkshopAuthInfo) {
+            lock.lock(); defer { lock.unlock() }
+            value = info
+        }
+
+        func clear() {
+            lock.lock(); defer { lock.unlock() }
+            value = nil
+        }
     }
 
-    private static func storeInPlaintextFile(_ info: BfmeWorkshopAuthInfo) throws {
-        let data = try JSONEncoder().encode(info)
-        try data.write(to: plaintextURL, options: .atomic)
-    }
-
-    private static func loadFromPlaintextFile() -> BfmeWorkshopAuthInfo? {
-        guard let data = try? Data(contentsOf: plaintextURL) else { return nil }
-        return try? JSONDecoder().decode(BfmeWorkshopAuthInfo.self, from: data)
-    }
-
-    private static func clearPlaintextFile() {
-        try? FileManager.default.removeItem(at: plaintextURL)
-    }
+    static let inMemoryStore = InMemoryCredentialStore()
 }

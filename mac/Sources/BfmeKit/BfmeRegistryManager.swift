@@ -237,11 +237,12 @@ public enum BfmeRegistryManager {
     /// No-op on macOS: the original body wrote to
     /// `HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers`
     /// to force Windows XP SP3 compatibility mode. macOS has no equivalent
-    /// shim layer. Kept as an entry point so the call sites in
-    /// `EnsureDefaults` don't need to branch.
+    /// shim layer. We keep the entry point so the call sites in
+    /// `EnsureDefaults` don't need to branch, and we emit a single log line
+    /// per call so the behavior matches what the doc comment promises
+    /// (review bullet #10).
     public static func ensureCompatibilitySettings(_ gamePath: String) {
-        // Intentionally empty. See doc comment above.
-        _ = gamePath
+        print("BfmeRegistryManager.ensureCompatibilitySettings: skipping AppCompatFlags write on non-Windows host for \(gamePath).")
     }
 
     /// Reports whether a game's `InstallPath` points at a directory that

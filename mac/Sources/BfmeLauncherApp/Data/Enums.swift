@@ -1,15 +1,18 @@
 import Foundation
+import BfmeKitCore
 
-/// Direct port of `src/BfmeFoundationProject_AllInOneLauncher/Data/Enums.cs`.
-/// Keeps the same integer backing so the WorkshopKit/BfmeKit APIs (which use
-/// `Int` indexed `BfmeGame` values) continue to interoperate without a
-/// separate conversion layer.
-public enum BfmeGame: Int, Sendable, CaseIterable, Codable {
-    case bfme1 = 0
-    case bfme2 = 1
-    case rotwk = 2
-    case none = 3
+/// Re-exports `BfmeKitCore.BfmeGame` so existing call sites that use an
+/// unqualified `BfmeGame` continue to compile. Removing the launcher's
+/// duplicate enum fixes the silent divergence review bullet #1: the old
+/// copy used `none = 3` while `BfmeKitCore.BfmeGame` uses `none = -1`, so
+/// cross-module calls that passed the sentinel through `rawValue` landed on
+/// different states depending on which module resolved the name. There is
+/// now exactly one definition.
+public typealias BfmeGame = BfmeKitCore.BfmeGame
 
+extension BfmeGame {
+    /// Human-readable label used in the launcher UI. Kept as an extension
+    /// so the portable core module stays free of launcher-specific copy.
     public var displayName: String {
         switch self {
         case .bfme1: return "BFME1"
