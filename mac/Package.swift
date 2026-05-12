@@ -11,13 +11,16 @@ let package = Package(
         .library(name: "BfmeHttpInstruments", targets: ["BfmeHttpInstruments"]),
         .library(name: "BfmeKitCore", targets: ["BfmeKitCore"]),
         .library(name: "BfmeDirectXRuntime", targets: ["BfmeDirectXRuntime"]),
-        // Additional products reserved for later features. They currently expose the
-        // same portable core surface; macOS-specific UI targets are added in later
-        // features and gated with `.when(platforms: [.macOS])` inside those targets.
         .library(name: "BfmeKit", targets: ["BfmeKit"]),
         .library(name: "BfmeWorkshopKit", targets: ["BfmeWorkshopKit"]),
         .library(name: "BfmeOnlineKit", targets: ["BfmeOnlineKit"]),
+        // UI library: the whole body is gated with `#if canImport(SwiftUI)` so
+        // Linux compiles an empty module and macOS gets the full SwiftUI
+        // surface.
         .library(name: "BfmeOnlineKitUI", targets: ["BfmeOnlineKitUI"]),
+        // Executable: on macOS this is the SwiftUI launcher app; on Linux the
+        // `@main` stub prints module versions so `swift build` still produces
+        // a working binary.
         .executable(name: "BfmeLauncherApp", targets: ["BfmeLauncherApp"])
     ],
     targets: [
@@ -54,8 +57,6 @@ let package = Package(
             ]
         ),
 
-        // Stub targets for later features. Each depends on the portable core so it
-        // can expose a real module even before its feature lands.
         .target(
             name: "BfmeKit",
             dependencies: ["BfmeKitCore", "BfmeHttpInstruments"],
@@ -66,7 +67,7 @@ let package = Package(
         ),
         .target(
             name: "BfmeWorkshopKit",
-            dependencies: ["BfmeKitCore", "BfmeHttpInstruments"],
+            dependencies: ["BfmeKitCore", "BfmeHttpInstruments", "BfmeKit"],
             path: "Sources/BfmeWorkshopKit"
         ),
         .target(
@@ -77,7 +78,10 @@ let package = Package(
         .target(
             name: "BfmeOnlineKitUI",
             dependencies: ["BfmeOnlineKit"],
-            path: "Sources/BfmeOnlineKitUI"
+            path: "Sources/BfmeOnlineKitUI",
+            resources: [
+                .copy("Fonts")
+            ]
         ),
         .executableTarget(
             name: "BfmeLauncherApp",
@@ -87,9 +91,13 @@ let package = Package(
                 "BfmeHttpInstruments",
                 "BfmeDirectXRuntime",
                 "BfmeWorkshopKit",
-                "BfmeOnlineKit"
+                "BfmeOnlineKit",
+                "BfmeOnlineKitUI"
             ],
-            path: "Sources/BfmeLauncherApp"
+            path: "Sources/BfmeLauncherApp",
+            resources: [
+                .copy("Resources")
+            ]
         ),
 
         // Tests
@@ -122,6 +130,15 @@ let package = Package(
             name: "BfmeOnlineKitTests",
             dependencies: ["BfmeOnlineKit", "BfmeKit", "BfmeKitCore", "BfmeHttpInstruments"],
             path: "Tests/BfmeOnlineKitTests"
+        ),
+        // Launcher-app tests exercise the portable Core logic (AppState,
+        // BfmeLaunchManager, SystemDisplayManager). They run on macOS only;
+        // on Linux the test target is excluded so the SwiftUI `@main` body
+        // never needs to build.
+        .testTarget(
+            name: "BfmeLauncherAppTests",
+            dependencies: ["BfmeLauncherApp", "BfmeKit", "BfmeKitCore"],
+            path: "Tests/BfmeLauncherAppTests"
         )
     ]
 )
