@@ -99,8 +99,15 @@ The launcher has been designed to work with any of the following:
 The `BfmeDirectXRuntime` module drops `d3dx9_*.dll`, `msvcr*.dll` and
 friends into the prefix's `drive_c/windows/system32` folder so that
 BFME's DirectX 9 dependencies are satisfied inside the bottle.
-Everything else (registry shim, launch, sync, Workshop) goes through
-the same prefix.
+
+The registry state the games use to locate themselves is written into
+the prefix by `BfmeWineBridge`, which `BfmeLaunchManager` invokes just
+before launching. This matters more than it sounds: the games read
+`InstallPath` from the prefix's registry, so launcher state held
+anywhere else is invisible to them and they report themselves as not
+installed. See [`WINE-BRIDGE.md`](WINE-BRIDGE.md) for the mechanism, the
+WOW6432Node and text-encoding constraints behind it, and an honest list
+of what is still not wired up.
 
 ## Apple Silicon specifics
 
