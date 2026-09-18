@@ -10,6 +10,7 @@ let package = Package(
         // Portable library products (compile on Linux and macOS)
         .library(name: "BfmeHttpInstruments", targets: ["BfmeHttpInstruments"]),
         .library(name: "BfmeKitCore", targets: ["BfmeKitCore"]),
+        .library(name: "BfmeWineBridge", targets: ["BfmeWineBridge"]),
         .library(name: "BfmeDirectXRuntime", targets: ["BfmeDirectXRuntime"]),
         .library(name: "BfmeKit", targets: ["BfmeKit"]),
         .library(name: "BfmeWorkshopKit", targets: ["BfmeWorkshopKit"]),
@@ -46,6 +47,15 @@ let package = Package(
             name: "BfmeKitCore",
             dependencies: [],
             path: "Sources/BfmeKitCore"
+        ),
+
+        // Bridges launcher state into the Wine prefix the games run in. The
+        // BFME executables are closed source Windows binaries, so this is the
+        // only way they can see what the native launcher has configured.
+        .target(
+            name: "BfmeWineBridge",
+            dependencies: ["BfmeKitCore"],
+            path: "Sources/BfmeWineBridge"
         ),
 
         .target(
@@ -88,6 +98,7 @@ let package = Package(
             dependencies: [
                 "BfmeKit",
                 "BfmeKitCore",
+                "BfmeWineBridge",
                 "BfmeHttpInstruments",
                 "BfmeDirectXRuntime",
                 "BfmeWorkshopKit",
@@ -110,6 +121,11 @@ let package = Package(
             name: "BfmeKitCoreTests",
             dependencies: ["BfmeKitCore"],
             path: "Tests/BfmeKitCoreTests"
+        ),
+        .testTarget(
+            name: "BfmeWineBridgeTests",
+            dependencies: ["BfmeWineBridge", "BfmeKitCore"],
+            path: "Tests/BfmeWineBridgeTests"
         ),
         .testTarget(
             name: "BfmeDirectXRuntimeTests",

@@ -1,6 +1,7 @@
 import Foundation
 import BfmeKit
 import BfmeKitCore
+import BfmeWineBridge
 
 /// Native-macOS rewrite of `BfmeLaunchManager.cs`. BFME is a Direct3D-9
 /// Windows game; on Apple Silicon it runs inside a compatibility layer:
@@ -93,6 +94,13 @@ public enum BfmeLaunchManager {
         /// Returns the current process environment the caller inherited.
         /// Overridable so tests can assert the exact merge behavior.
         public var processEnvironment: @Sendable () -> [String: String]
+        /// Collects the registry state the game needs to find itself. Nil
+        /// means "nothing to project", which skips the step.
+        public var registryStateForGame: @Sendable (BfmeGame, String) async -> BfmeGameRegistryState?
+        /// Writes that state into the Wine prefix the game will run in.
+        /// Overridable so tests can assert the projection happens without a
+        /// Wine install present.
+        public var projectRegistry: @Sendable (BfmeGameRegistryState, WineRuntime) throws -> Void
 
         public init(
             fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
@@ -114,7 +122,18 @@ public enum BfmeLaunchManager {
                 )
             },
             homeDirectory: @escaping @Sendable () -> String = { FileManager.default.homeDirectoryForCurrentUser.path },
-            processEnvironment: @escaping @Sendable () -> [String: String] = { ProcessInfo.processInfo.environment }
+            processEnvironment: @escaping @Sendable () -> [String: String] = { ProcessInfo.processInfo.environment },
+            registryStateForGame: @escaping @Sendable (BfmeGame, String) async -> BfmeGameRegistryState? = { game, installPath in
+                BfmeGameRegistryState(
+                    game: game.rawValue,
+                    installPathUnix: installPath,
+                    language: await BfmeRegistryManager.getKeyValue(game.rawValue, .language),
+                    serialKey: await BfmeRegistryManager.getKeyValue(game.rawValue, .serialKey)
+                )
+            },
+            projectRegistry: @escaping @Sendable (BfmeGameRegistryState, WineRuntime) throws -> Void = { state, runtime in
+                try BfmeGameRegistryProjection.project(state, through: WinePrefixBridge(runtime: runtime))
+            }
         ) {
             self.fileExists = fileExists
             self.installPathForGame = installPathForGame
@@ -125,6 +144,8 @@ public enum BfmeLaunchManager {
             self.createDirectory = createDirectory
             self.homeDirectory = homeDirectory
             self.processEnvironment = processEnvironment
+            self.registryStateForGame = registryStateForGame
+            self.projectRegistry = projectRegistry
         }
 
         public static func defaultRunProcess(
@@ -418,6 +439,39 @@ public enum BfmeLaunchManager {
            resolved.compatibilityLayer != .whisky {
             environment.createDirectory(prefix)
         }
+
+        // Project the launcher's state into the prefix before the game starts.
+        //
+        // This step is what makes the game able to find itself. `lotrbfme*.exe`
+        // reads its install directory from
+        // `HKLM\SOFTWARE\Electronic Arts\...\InstallPath` — the prefix's
+        // registry. State kept only in the launcher's own storage is invisible
+        // to it, and it reports itself as not installed. The path also has to be
+        // translated to a Windows path here, because the game concatenates
+        // `\lotrbfme*.exe` onto whatever that value holds.
+        //
+        // Deliberately non-fatal. A prefix may already carry correct registry
+        // state, for instance because the game was installed into it by a real
+        // Windows installer, and refusing to launch because we could not
+        // re-assert values that are already right would be worse than trying.
+        // The failure is reported rather than swallowed, because a game that
+        // then claims not to be installed is otherwise very hard to diagnose.
+        if let state = await environment.registryStateForGame(resolved.game, resolved.workingDirectory) {
+            let runtime = WineRuntime(
+                binaryPath: runnerPath,
+                prefixPath: resolved.environmentOverrides["WINEPREFIX"],
+                extraEnvironment: resolved.environmentOverrides
+            )
+            do {
+                try environment.projectRegistry(state, runtime)
+            } catch {
+                print("""
+                BfmeLaunchManager: could not write \(resolved.game.displayName)'s registry state into the Wine \
+                prefix: \(error). Launching anyway. If the game reports that it is not installed, this is why.
+                """)
+            }
+        }
+
         _ = try environment.runProcess(runnerPath, runnerArgs, resolved.workingDirectory, resolved.environmentOverrides)
     }
 
