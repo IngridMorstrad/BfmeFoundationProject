@@ -30,10 +30,9 @@ namespace BfmeFoundationProject.AllInOneLauncher
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            base.OnStartup(e);
-
-            // Force software rendering to prevent Wine/DirectX crashes on Mac/Linux
-            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+            // Picks hardware or software WPF rendering for the current host. No-op on a normal
+            // Windows PC; only Wine (or an explicit BFME_RENDER_MODE) gets software rendering.
+            HostEnvironment.ApplyRenderMode();
 
 #if DEBUG
 #else
@@ -69,6 +68,8 @@ namespace BfmeFoundationProject.AllInOneLauncher
                 ExitImmediately();
                 return;
             }
+
+            base.OnStartup(e);
 
             StartServer();
             EnsureShortcut();

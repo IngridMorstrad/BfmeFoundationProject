@@ -10,8 +10,20 @@ namespace BfmeFoundationProject.DirectXRuntime
     {
         private static readonly string DxRuntimeVersion = "v1";
 
+        /// <summary>
+        /// Set to 1/true to skip running the DirectX 9 redistributable entirely, for hosts where
+        /// d3dx9 is already provisioned by other means (a Wine prefix set up with winetricks, or
+        /// a VM image that has had the redist installed once already). DXSETUP.exe is a legacy
+        /// 32-bit x86 installer, so skipping it also avoids running it under emulation on
+        /// Windows-on-ARM guests.
+        /// </summary>
+        public const string SkipVariable = "BFME_SKIP_DX_RUNTIME";
+
         public static async Task EnsureRuntimes()
         {
+            if (IsSkipRequested())
+                return;
+
             await Task.Run(() =>
             {
                 string configDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BFME Workshop", "Config");
@@ -54,33 +66,51 @@ namespace BfmeFoundationProject.DirectXRuntime
 
                 if (installDxRuntime)
                 {
-                    try
-                    {
-                        if (File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "D3DX9_43.dll")))
-                            File.Delete(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "D3DX9_43.dll"));
-
-                        if (File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "d3dx9_43.dll")))
-                            File.Delete(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "d3dx9_43.dll"));
-                    }
-                    catch { }
-
-                    try
-                    {
-                        if (File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.SystemX86), "D3DX9_43.dll")))
-                            File.Delete(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.SystemX86), "D3DX9_43.dll"));
-
-                        if (File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.SystemX86), "d3dx9_43.dll")))
-                            File.Delete(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.SystemX86), "d3dx9_43.dll"));
-                    }
-                    catch { }
-
                     ZipFile.ExtractToDirectory(Path.Combine(directxDirectory, "dx9_redist.zip"), Path.Combine(directxDirectory, "dx9_redist"), true);
-                    if (File.Exists(Path.Combine(directxDirectory, "dx9_redist", "DXSETUP.exe")))
-                        Process.Start(new ProcessStartInfo("cmd", $"/C \"{Path.Combine(directxDirectory, "dx9_redist", "DXSETUP.exe")}\" /silent") { CreateNoWindow = true })!.WaitForExit();
+
+                    string dxSetupPath = Path.Combine(directxDirectory, "dx9_redist", "DXSETUP.exe");
+
+                    // Only clear the existing d3dx9_43 copies once we know we actually have an
+                    // installer to put them back with, otherwise a failed extract would leave the
+                    // system with no d3dx9 at all.
+                    if (File.Exists(dxSetupPath))
+                    {
+                        DeleteSystemD3dx9(Environment.SpecialFolder.System);
+                        DeleteSystemD3dx9(Environment.SpecialFolder.SystemX86);
+
+                        Process.Start(new ProcessStartInfo("cmd", $"/C \"{dxSetupPath}\" /silent") { CreateNoWindow = true })!.WaitForExit();
+                    }
                 }
 
                 File.WriteAllText(Path.Combine(configDirectory, "dx_version.flag"), $"{DxRuntimeVersion}\n0");
             });
+        }
+
+        private static bool IsSkipRequested()
+        {
+            string value = (Environment.GetEnvironmentVariable(SkipVariable) ?? "").Trim();
+
+            return value.Equals("1", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("true", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void DeleteSystemD3dx9(Environment.SpecialFolder systemFolder)
+        {
+            try
+            {
+                string systemDirectory = Environment.GetFolderPath(systemFolder);
+
+                // Casing varies between redist versions and the filesystem may be case sensitive.
+                foreach (string fileName in new[] { "D3DX9_43.dll", "d3dx9_43.dll" })
+                {
+                    string path = Path.Combine(systemDirectory, fileName);
+
+                    if (File.Exists(path))
+                        File.Delete(path);
+                }
+            }
+            catch { }
         }
     }
 }

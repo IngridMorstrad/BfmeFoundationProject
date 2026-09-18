@@ -13,7 +13,12 @@
 		<Nullable>enable</Nullable>
 
 		<Platforms>AnyCPU;x86;x64</Platforms>
-		<PlatformTarget>x64</PlatformTarget>
+		<!--
+			Default to x64 as before. When a RuntimeIdentifier is supplied the SDK infers the
+			matching PlatformTarget from it, so leaving it unset is what allows a win-arm64
+			build (see macos/README.md) without the two settings contradicting each other.
+		-->
+		<PlatformTarget Condition="'$(RuntimeIdentifier)' == ''">x64</PlatformTarget>
 		<OutputType>WinExe</OutputType>
 		<ApplicationIcon>allinonelaunchericon.ico</ApplicationIcon>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
@@ -21,9 +26,16 @@
 		<DebugSymbols>true</DebugSymbols>
 		<DebugType>embedded</DebugType>
 
-		<SelfContained>true</SelfContained>
-		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
-		<PublishSingleFile>false</PublishSingleFile>
+		<!--
+			Deployment shape is deliberately NOT pinned here. The official release is a single
+			framework-dependent AllInOneLauncher.exe, which is what LauncherUpdateManager
+			downloads and swaps in place. Pinning SelfContained/RuntimeIdentifier in the project
+			file would turn every build into a multi-file self-contained folder and break that.
+
+			Pass them per build instead, e.g. for a Windows-on-ARM VM guest on macOS:
+			  dotnet publish -r win-arm64 -p:SelfContained=true
+			See macos/README.md.
+		-->
 	</PropertyGroup>
 
 	<Target Name="GenerateBuildInfo" BeforeTargets="BeforeBuild">

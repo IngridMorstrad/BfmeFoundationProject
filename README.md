@@ -54,6 +54,9 @@ BfmeKit helps you install BFME and read/modify the registry keys used by the BFM
 ## Source Code
 Besides Arena, everything we make is open source, and is included inside this monorepo. There are no external dependencies required (except of course Visual Studio, and the relevant .NET SDKs), and everything should just build and work. If it doesn't, make an issue in the issues tab, and we'll see what we can do.
 
+### Running on a Mac
+The launcher is a Windows WPF app and BFME is a set of Windows games, so on macOS both need a Windows virtual machine. [`macos/`](macos/) has tooling for that: a host preflight check, a script that cross-builds a Windows launcher bundle (including a native `win-arm64` one for Apple silicon guests) straight from macOS, and a provisioning script for the guest. See [`macos/README.md`](macos/README.md).
+
 ## License
 We don't have a license. Everything that is in this repository is open source. Don't abuse it, don't get sued because of it, don't die because of it, but if you do, don't drag us into it, because we are not taking any responsibility for what you do with it :)
 

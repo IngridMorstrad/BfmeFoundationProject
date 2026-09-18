@@ -20,6 +20,12 @@ public static class LauncherUpdateManager
         return;
 #endif
 
+        // A locally built launcher has a hash the update server has never heard of, so the
+        // updater would always "update" it back to the official win-x64 build. That breaks any
+        // host-specific build (e.g. the win-arm64 one used inside a Windows-on-ARM VM on macOS).
+        if (HostEnvironment.IsSelfUpdateDisabled)
+            return;
+
         try
         {
             if (!Directory.Exists(LauncherAppDirectory))

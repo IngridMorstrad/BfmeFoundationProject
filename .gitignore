@@ -19,6 +19,9 @@ ssh/
 **/bin/
 **/obj/
 
+# Output of macos/build-launcher.sh
+dist/
+
 src/BfmeFoundationProject_BfmeClient/
 src/BfmeFoundationProject_BfmeInterface/
 src/BfmeFoundationProject_MissionControl/
